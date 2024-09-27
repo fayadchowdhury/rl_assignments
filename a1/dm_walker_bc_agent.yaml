@@ -8,7 +8,8 @@ model:
   
 optimizer:
     type: "SGD"
-    learning_rate: 5e-4
+    # learning_rate: 5e-4
+    learning_rate: 5e-3
     
 expert_config: "data/agents/bc_expert_agent.yaml"
 expert_model_file: "data/models/dm_walker_run_expert_model.pt"
