@@ -122,13 +122,20 @@ class BCAgent(base_agent.BaseAgent):
 
         ## a) sample an action from the policy
         # placeholder
-        a_space = self._env.get_action_space()
-        a = torch.zeros(a_space.shape, device=self._device)
+        norm_obs = self._obs_norm.normalize(obs)
+        a_dist = self._model.eval_actor(norm_obs)
+        a_sample = a_dist.sample()
+        a = self._a_norm.unnormalize(a_sample).detach()
+        # print(f"a: {a}, {type(a)}")
+        # a_space = self._env.get_action_space()
+        # a = torch.zeros(a_space.shape, device=self._device)
         
         ## b) query the expert for an action
         # placeholder
-        a_space = self._env.get_action_space()
-        expert_a = torch.zeros(a_space.shape, device=self._device)
+        expert_a = self._eval_expert(obs).detach()
+        # print(f"expert_a: {expert_a}, {type(expert_a)}")
+        # a_space = self._env.get_action_space()
+        # expert_a = torch.zeros(a_space.shape, device=self._device)
 
         a_info = {
             "expert_a": expert_a
@@ -140,5 +147,11 @@ class BCAgent(base_agent.BaseAgent):
         TODO 1.2: Implement code to calculate the loss for training the policy.
         '''
         # placeholder
-        loss = torch.zeros(1, device=self._device)
+        
+        # print(type(norm_expert_a))
+        loss = -self._model.eval_actor(norm_obs).log_prob(norm_expert_a).mean()
+        # print(loss)
+        # print(f"norm_obs: {norm_obs}")
+        # print(f"norm_expert_a: {norm_expert_a}")
+        # loss = torch.zeros(1, device=self._device)
         return loss
