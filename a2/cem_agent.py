@@ -132,9 +132,17 @@ class CEMAgent(base_agent.BaseAgent):
         [n, param_size].
         '''
         param_size = self._param_mean.shape[0]
+        # print(f"param_size: {param_size}")
 
         # placeholder
-        candidates = torch.zeros([n, param_size], device=self._device)
+        mean = self._param_mean
+        std = self._param_std
+        # print(f"mean {mean.shape}: {mean}") 
+        # print(f"std {std.shape}: {std}") 
+        # candidates = torch.zeros([n, param_size], device=self._device)
+        candidates = torch.normal(mean=mean, std=std).unsqueeze(0).repeat(n, 1)
+        candidates = candidates.to(self._device)
+        # print(candidates.shape)
 
         return candidates
 
@@ -150,8 +158,15 @@ class CEMAgent(base_agent.BaseAgent):
         n = candidates.shape[0]
 
         # placeholder
+        # print(f"Shape of candidates in _eval_candidates: {candidates.shape}")
         rets = torch.zeros(n, dtype=torch.float64, device=self._device)
         ep_lens = torch.zeros(n, dtype=torch.float64, device=self._device)
+        for i in range(n):
+            # print(f'Evaluating {i} of {n} candidate parameters')
+            torch.nn.utils.vector_to_parameters(candidates[i], self._model.parameters())
+            return_dicts = self._rollout_test(self._eps_per_candidate)
+            rets[i] = return_dicts["mean_return"]
+            ep_lens[i] = return_dicts["mean_ep_len"]
 
         return rets, ep_lens
 
@@ -164,8 +179,33 @@ class CEMAgent(base_agent.BaseAgent):
         '''
         param_size = self._param_mean.shape[0]
 
+        # print(f"Params {params.shape}")
+        # print(f"{params}")
+
+        # print(f"Rets {len(rets)}")
+        # print(f"{rets}")
+        
+        # Number of elite samples = ratio * number of candidate parameters
+        num_elite_samples = int(self._elite_ratio * params.shape[0])
+        # print(f"Number of elite samples: {num_elite_samples}")
+
+        # Get top K elite ret indices
+        elite_indices = torch.topk(torch.Tensor(rets), num_elite_samples).indices
+        # print(f"Elite indices: {elite_indices}")
+        # print(f"Max ret: {max(rets)}")
+        # print(f"Elite ret: {rets[elite_indices[0]]}")
+
+        # Get elite candidates
+        # params_copy = params.copy()
+        # for i in elite_indices:
+        #     print(params[i])
+
+        # Get mean and clamped std of elite params
+        new_mean = params[elite_indices].mean(dim=0)
+        new_std = torch.clamp(params[elite_indices].std(dim=0), min=self._min_param_std)
+
         # placeholder
-        new_mean = torch.zeros(param_size, device=self._device)
-        new_std = torch.ones(param_size, device=self._device)
+        # new_mean = torch.zeros(param_size, device=self._device)
+        # new_std = torch.ones(param_size, device=self._device)
 
         return new_mean, new_std

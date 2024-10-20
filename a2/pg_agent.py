@@ -195,9 +195,32 @@ class PGAgent(base_agent.BaseAgent):
         indicating if a timestep is the last timestep of an episode, Output a
         tensor (return_t) containing the return (i.e. reward-to-go) at each timestep.
         '''
-        
+        # print(f"r {r.shape}")
+        # print(f"{r}")
+
+        # print(f"done {done.shape}")
+        # print(f"{done}")
+
         # placeholder
         return_t = torch.zeros_like(r)
+        r_to_go = 0.0
+
+        # Clone
+        # r = r.clone()
+        # done = done.clone()
+
+        # for t in range(len(r)):
+        #     if t == 0 or (t >= 1 and done[t-1]): # Just after ending an episode
+        #         r_to_go = 0 # Reset r_to_go
+        #     r_to_go = r[t] + self._discount * r_to_go
+        #     return_t[t] = r_to_go
+
+        for t in reversed(range(len(r))):
+            if done[t]:
+                r_to_go = 0.0
+            r_to_go = r[t] + self._discount * r_to_go
+            return_t[t] = r_to_go
+
         return return_t
 
     def _calc_adv(self, norm_obs, ret):
@@ -206,9 +229,31 @@ class PGAgent(base_agent.BaseAgent):
         every timestep (ret), output the advantage at each timestep (adv).
         '''
         
+        # print(f"Norm obs {len(norm_obs)}")
+        # print(f"{norm_obs}")
+
         # placeholder
         adv = torch.zeros_like(ret)
-        return adv
+
+        # Clone
+        # norm_obs = norm_obs.clone()
+        # ret = ret.clone()
+        
+        # Get values from value function
+        V = self._model.eval_critic(norm_obs).squeeze()
+
+        # print(f"V in calc_adv: {V.shape}")
+        # print(f"{V}")
+
+        # print(f"ret in calc_adv: {ret.shape}")
+        # print(f"{ret}")
+
+        # Compute adv according to equation given
+        adv = ret - V
+        # print(f"adv in calc_adv: {adv.shape}")
+        # print(f"{adv}")
+        
+        return adv.detach()
 
     def _calc_critic_loss(self, norm_obs, tar_val):
         '''
@@ -216,9 +261,28 @@ class PGAgent(base_agent.BaseAgent):
         every timestep (tar_val), compute a loss for updating the value
         function (critic).
         '''
+
+        # Clone
+        # norm_obs = norm_obs.clone()
+        # tar_val = tar_val.clone()
+
+        # print(f"Target values in calc_critic_loss: {tar_val.shape}")
+        # print(f"{tar_val}")
         
         # placeholder
-        loss = torch.zeros(1, device=self._device)
+        # loss = torch.zeros(1, device=self._device)
+
+        # Get values from value function
+        V = self._model.eval_critic(norm_obs).squeeze()
+
+        # print(f"V in calc_critic_loss: {V.shape}")
+        # print(f"{V}")
+
+        # Use PyTorch's MSE loss to compute loss
+        loss = torch.nn.functional.mse_loss(V, tar_val)
+
+        # print(f"Loss: {loss}")
+
         return loss
 
     def _calc_actor_loss(self, norm_obs, norm_a, adv):
@@ -227,7 +291,22 @@ class PGAgent(base_agent.BaseAgent):
         actions (norm_a), and the advantage at every timestep (adv), compute
         a loss for updating the policy (actor).
         '''
-        
+
+        # Clone
+        # norm_obs = norm_obs.clone()
+        # norm_a = norm_a.clone()
+        # adv = adv.clone()
+
         # placeholder
         loss = torch.zeros(1, device=self._device)
+
+        # Get action distribution from actor evaluation
+        actions = self._model.eval_actor(norm_obs)
+
+        # Get log-likelihood from actions distribution
+        log_likelihood = actions.log_prob(norm_a)
+
+        # Get expectation (mean)
+        loss = -(adv * log_likelihood).mean()
+
         return loss
