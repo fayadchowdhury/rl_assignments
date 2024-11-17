@@ -129,7 +129,12 @@ class DQNAgent(base_agent.BaseAgent):
         '''
 
         # placeholder
-        prob = 1.0
+        # prob = 1.0
+        # print(f"Sample count: {type(torch.tensor(self._sample_count))}")
+        # print(f"Anneal samples: {type(torch.tensor(self._exp_anneal_samples))}")
+        # print(f"Final type of output: {type(torch.tensor(self._sample_count)/torch.tensor(self._exp_anneal_samples))}")
+        l = torch.clamp(torch.tensor(self._sample_count)/torch.tensor(self._exp_anneal_samples), min=0, max=1)
+        prob = (1-l)*self._exp_prob_beg + l*self._exp_prob_end
 
         return prob
 
@@ -143,9 +148,21 @@ class DQNAgent(base_agent.BaseAgent):
         action.
         '''
         exp_prob = self._get_exp_prob()
-
+        # print(f"Qs {qs.shape}:")
+        # print(f"{qs}")
+        greedy_action_idx = torch.argmax(qs, dim=-1)
+        # print(f"Greedy action idx: {greedy_action_idx}")
+        num_actions = qs.shape[1]
+        # print(f"Randomly generated number between 0 and num_actions ({num_actions}): {np.random.randint(0, num_actions)}")            
         # placeholder
-        a = torch.zeros(qs.shape[0], device=self._device, dtype=torch.int64)
+
+        if torch.rand(1).item() < exp_prob:
+            a = torch.randint(0, num_actions, (qs.shape[0],), device=self._device, dtype=torch.int64)
+        else:
+            a = greedy_action_idx
+
+        # print(f"a {a.shape}:")
+        # print(f"{a}")
         return a
     
     def _compute_tar_vals(self, r, norm_next_obs, done):
@@ -159,7 +176,13 @@ class DQNAgent(base_agent.BaseAgent):
         '''
         
         # placeholder
-        tar_vals = torch.zeros_like(r)
+        # tar_vals = torch.zeros_like(r)
+        # Compute max Q-values for next states using the target model
+        with torch.no_grad(): # To prevent updates to target model
+            max_q_next = torch.max(self._tar_model.eval_q(norm_next_obs), dim=-1)[0]
+        
+        # Calculate target values
+        tar_vals = r + self._discount * (1 - done) * max_q_next
 
         return tar_vals
 
@@ -171,8 +194,15 @@ class DQNAgent(base_agent.BaseAgent):
         should be a scalar tensor containing the loss for updating the Q-function.
         '''
         
+        # Generate preds based on model
+        preds = self._model.eval_q(norm_obs)
+        # Reshape into required shape
+        preds = preds.gather(1, a.view(-1, 1))
+
         # placeholder
-        loss = torch.zeros(1, device=self._device)
+        # loss = torch.zeros(1, device=self._device)
+        # Compute loss
+        loss = torch.mean((preds.squeeze() - tar_vals) ** 2)
         
         return loss
     
@@ -183,5 +213,9 @@ class DQNAgent(base_agent.BaseAgent):
         HINT: self._model.parameters() can be used to retrieve a list of tensors containing
         the parameters of a model.
         '''
-        
+
+        # Copy over model params to target model params by looping over both params lists
+        for target_param, param in zip(self._tar_model.parameters(), self._model.parameters()):
+            target_param.data.copy_(param.data)
+
         return
